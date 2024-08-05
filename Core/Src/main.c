@@ -122,14 +122,17 @@ int main(void)
 
     // TODO: Check pushbuttons to change timer delay
 	 if (HAL_GPIO_ReadPin(GPIOA, Button0) == GPIO_PIN_SET) {
-	          __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_05);
-	      }
+	 	__HAL_TIM_SET_AUTORELOAD(&htim16, TIME_05);
+	 }
 	 if (HAL_GPIO_ReadPin(GPIOA, Button1) == GPIO_PIN_SET) {
-	 	          __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_1);
-	 	      }
+	 	__HAL_TIM_SET_AUTORELOAD(&htim16, TIME_1);
+	 }
 	 if (HAL_GPIO_ReadPin(GPIOA, Button2) == GPIO_PIN_SET) {
-	 	          __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_2);
-	 	      }
+		 __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_2);
+	 }
+	 if (HAL_GPIO_ReadPin(GPIOA, Button3) == GPIO_PIN_SET) {
+	 	patternNumber = 1;
+	 }
     
 
   }
@@ -354,30 +357,34 @@ void TIM16_IRQHandler(void)
 	if(patternNumber == 1){
 		GPIOB -> ODR = PATTERN_1;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 2){
+		GPIOB -> ODR = PATTERN_2;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 3){
+		GPIOB -> ODR = PATTERN_3;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 4){
+		GPIOB -> ODR = PATTERN_4;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 5){
+		GPIOB -> ODR = PATTERN_5;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 6){
+		GPIOB -> ODR = PATTERN_6;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 7){
+		GPIOB -> ODR = PATTERN_7;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 8){
+		GPIOB -> ODR = PATTERN_8;
 	}
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
+	if(patternNumber == 9){
+		GPIOB -> ODR = PATTERN_9;
 	}
+	else{
+		patternNumber = 0;
+	}
+	paternNumber++;
 
   
 }
