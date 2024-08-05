@@ -44,6 +44,8 @@ TIM_HandleTypeDef htim16;
 
 /* USER CODE BEGIN PV */
 // TODO: Define input variables
+// Define led patterns as 8 bit numbers
+int patternNumber = 1;
 const uint8_t PATERN_1 = 0b11101001;
 const uint8_t PATERN_2 = 0b11010010;
 const uint8_t PATERN_3 = 0b10100100;
@@ -54,9 +56,10 @@ const uint8_t PATERN_7 = 0b01000000;
 const uint8_t PATERN_8 = 0b10000000;
 const uint8_t PATERN_9 = 0b00000000;
 
-const int TIME_05 = 500;
-const int TIME_1 = 1000;
-const int TIME_20 = 2000;
+// Define ARR values to be used for different time settings
+const int TIME_05 = 499;
+const int TIME_1 = 999;
+const int TIME_2 = 1999;
 
 
 
@@ -105,6 +108,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   // TODO: Start timer TIM16
+  HAL_TIM_Base_Start_IT(&htim16);
 
   /* USER CODE END 2 */
 
@@ -117,7 +121,15 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     // TODO: Check pushbuttons to change timer delay
-    
+	 if (HAL_GPIO_ReadPin(GPIOA, Button0) == GPIO_PIN_SET) {
+	          __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_05);
+	      }
+	 if (HAL_GPIO_ReadPin(GPIOA, Button1) == GPIO_PIN_SET) {
+	 	          __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_1);
+	 	      }
+	 if (HAL_GPIO_ReadPin(GPIOA, Button2) == GPIO_PIN_SET) {
+	 	          __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_2);
+	 	      }
     
 
   }
@@ -339,7 +351,33 @@ void TIM16_IRQHandler(void)
 	HAL_TIM_IRQHandler(&htim16);
 
 	// TODO: Change LED pattern
-	// print something
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
+	if(patternNumber == 1){
+		GPIOB -> ODR = PATTERN_1;
+	}
 
   
 }
