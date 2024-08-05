@@ -44,6 +44,20 @@ TIM_HandleTypeDef htim16;
 
 /* USER CODE BEGIN PV */
 // TODO: Define input variables
+const uint8_t PATERN_1 = 0b11101001;
+const uint8_t PATERN_2 = 0b11010010;
+const uint8_t PATERN_3 = 0b10100100;
+const uint8_t PATERN_4 = 0b01001000;
+const uint8_t PATERN_5 = 0b10010000;
+const uint8_t PATERN_6 = 0b00100000;
+const uint8_t PATERN_7 = 0b01000000;
+const uint8_t PATERN_8 = 0b10000000;
+const uint8_t PATERN_9 = 0b00000000;
+
+const int TIME_05 = 500;
+const int TIME_1 = 1000;
+const int TIME_20 = 2000;
+
 
 
 /* USER CODE END PV */
