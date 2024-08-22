@@ -21,8 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdint.h>
+#include <stdio.h>
 #include "stm32f0xx.h"
+#include "lcd_stm32f0.c"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,6 +33,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+// TODO: Add values for below variables
+#define NS        128// Number of samples in LUT
+#define TIM2CLK   8000000// STM Clock frequency
+#define F_SIGNAL  120// Frequency of output analog signal
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -40,37 +45,97 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim16;
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
+DMA_HandleTypeDef hdma_tim2_ch1;
 
 /* USER CODE BEGIN PV */
-// TODO: Define input variables
-// Define led patterns as 8 bit numbers
-int patternNumber = 1;
-const uint8_t PATERN_1 = 0b11101001;
-const uint8_t PATERN_2 = 0b11010010;
-const uint8_t PATERN_3 = 0b10100100;
-const uint8_t PATERN_4 = 0b01001000;
-const uint8_t PATERN_5 = 0b10010000;
-const uint8_t PATERN_6 = 0b00100000;
-const uint8_t PATERN_7 = 0b01000000;
-const uint8_t PATERN_8 = 0b10000000;
-const uint8_t PATERN_9 = 0b00000000;
+// TODO: Add code for global variables, including LUTs
 
-// Define ARR values to be used for different time settings
-const int TIME_05 = 499;
-const int TIME_1 = 999;
-const int TIME_2 = 1999;
+// Time values to handle debouncing
+#define DEBOUNCE_TIME 100
+uint32_t current_tick;
+uint32_t last_tick = 0;
 
+// Store Current LUT Name
+char current_LUT = 1;
 
+// LUTs
+uint32_t Sin_LUT[NS] = {
+		   512,   537,   562,   587,   611,   636,   660,
+		   684,   707,   730,   753,   775,   796,   816,
+		   836,   855,   874,   891,   907,   923,   937,
+		   951,   963,   974,   985,   994,  1001,  1008,
+		  1014,  1018,  1021,  1023,  1023,  1023,  1021,
+		  1018,  1014,  1008,  1001,   994,   985,   974,
+		   963,   951,   937,   923,   907,   891,   874,
+		   855,   836,   816,   796,   775,   753,   730,
+		   707,   684,   660,   636,   611,   587,   562,
+		   537,   512,   486,   461,   436,   412,   387,
+		   363,   339,   316,   293,   270,   248,   227,
+		   207,   187,   168,   149,   132,   116,   100,
+		    86,    72,    60,    49,    38,    29,    22,
+		    15,     9,     5,     2,     0,     0,     0,
+		     2,     5,     9,    15,    22,    29,    38,
+		    49,    60,    72,    86,   100,   116,   132,
+		   149,   168,   187,   207,   227,   248,   270,
+		   293,   316,   339,   363,   387,   412,   436,
+		   461,   486 };
+uint32_t saw_LUT[NS] = {
+	     0,     8,    16,    24,    32,    40,    48,
+	    56,    64,    72,    80,    88,    96,   104,
+	   112,   120,   128,   136,   144,   152,   160,
+	   168,   176,   184,   192,   200,   208,   216,
+	   224,   232,   240,   248,   256,   264,   272,
+	   280,   288,   296,   304,   312,   320,   328,
+	   336,   344,   352,   360,   368,   376,   384,
+	   392,   400,   408,   416,   424,   432,   440,
+	   448,   456,   464,   472,   480,   488,   496,
+	   504,   512,   519,   527,   535,   543,   551,
+	   559,   567,   575,   583,   591,   599,   607,
+	   615,   623,   631,   639,   647,   655,   663,
+	   671,   679,   687,   695,   703,   711,   719,
+	   727,   735,   743,   751,   759,   767,   775,
+	   783,   791,   799,   807,   815,   823,   831,
+	   839,   847,   855,   863,   871,   879,   887,
+	   895,   903,   911,   919,   927,   935,   943,
+	   951,   959,   967,   975,   983,   991,   999,
+	  1007,  1015 };
+uint32_t triangle_LUT[NS] = {
+	     0,    16,    32,    48,    64,    80,    96,
+	   112,   128,   144,   160,   176,   192,   208,
+	   224,   240,   256,   272,   288,   304,   320,
+	   336,   352,   368,   384,   400,   416,   432,
+	   448,   464,   480,   496,   512,   527,   543,
+	   559,   575,   591,   607,   623,   639,   655,
+	   671,   687,   703,   719,   735,   751,   767,
+	   783,   799,   815,   831,   847,   863,   879,
+	   895,   911,   927,   943,   959,   975,   991,
+	  1007,  1023,  1007,   991,   975,   959,   943,
+	   927,   911,   895,   879,   863,   847,   831,
+	   815,   799,   783,   767,   751,   735,   719,
+	   703,   687,   671,   655,   639,   623,   607,
+	   591,   575,   559,   543,   527,   512,   496,
+	   480,   464,   448,   432,   416,   400,   384,
+	   368,   352,   336,   320,   304,   288,   272,
+	   256,   240,   224,   208,   192,   176,   160,
+	   144,   128,   112,    96,    80,    64,    48,
+	    32,    16 };
 
+// TODO: Equation to calculate TIM2_Ticks
+
+uint32_t TIM2_Ticks = TIM2CLK/(NS*F_SIGNAL); // How often to write new LUT value
+uint32_t DestAddress = (uint32_t) &(TIM3->CCR3); // Write LUT TO TIM3->CCR3 to modify PWM duty cycle
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_TIM16_Init(void);
+static void MX_DMA_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-void TIM16_IRQHandler(void);
+void EXTI0_1_IRQHandler(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -104,11 +169,29 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_TIM16_Init();
+  MX_DMA_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  // TODO: Start timer TIM16
-  HAL_TIM_Base_Start_IT(&htim16);
+  // TODO: Start TIM3 in PWM mode on channel 3
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+
+
+  // TODO: Start TIM2 in Output Compare (OC) mode on channel 1.
+  HAL_TIM_OC_Start(&htim2, TIM_CHANNEL_1);
+
+  // TODO: Start DMA in IT mode on TIM2->CH1; Source is LUT and Dest is TIM3->CCR3; start with Sine LUT
+  HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)Sin_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
+
+  // TODO: Write current waveform to LCD ("Sine")
+  init_LCD();
+  lcd_command(CLEAR);
+  lcd_putstring("Sine");
+
+  // TODO: Enable DMA (start transfer from LUT to CCR)
+  __HAL_TIM_ENABLE_DMA(&htim2, TIM_DMA_CC1);
+  HAL_TIM_Base_Start(&htim2);
 
   /* USER CODE END 2 */
 
@@ -119,22 +202,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-    // TODO: Check pushbuttons to change timer delay
-	 if (HAL_GPIO_ReadPin(GPIOA, Button0) == GPIO_PIN_SET) {
-	 	__HAL_TIM_SET_AUTORELOAD(&htim16, TIME_05);
-	 }
-	 if (HAL_GPIO_ReadPin(GPIOA, Button1) == GPIO_PIN_SET) {
-	 	__HAL_TIM_SET_AUTORELOAD(&htim16, TIME_1);
-	 }
-	 if (HAL_GPIO_ReadPin(GPIOA, Button2) == GPIO_PIN_SET) {
-		 __HAL_TIM_SET_AUTORELOAD(&htim16, TIME_2);
-	 }
-	 if (HAL_GPIO_ReadPin(GPIOA, Button3) == GPIO_PIN_SET) {
-	 	patternNumber = 1;
-	 }
-    
-
   }
   /* USER CODE END 3 */
 }
@@ -176,34 +243,135 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief TIM16 Initialization Function
+  * @brief TIM2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM16_Init(void)
+static void MX_TIM2_Init(void)
 {
 
-  /* USER CODE BEGIN TIM16_Init 0 */
+  /* USER CODE BEGIN TIM2_Init 0 */
 
-  /* USER CODE END TIM16_Init 0 */
+  /* USER CODE END TIM2_Init 0 */
 
-  /* USER CODE BEGIN TIM16_Init 1 */
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
-  /* USER CODE END TIM16_Init 1 */
-  htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 8000-1;
-  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 1000-1;
-  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim16.Init.RepetitionCounter = 0;
-  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = TIM2_Ticks;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM16_Init 2 */
-  NVIC_EnableIRQ(TIM16_IRQn);
-  /* USER CODE END TIM16_Init 2 */
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 1023;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel4_5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel4_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel4_5_IRQn);
 
 }
 
@@ -214,7 +382,7 @@ static void MX_TIM16_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+  LL_EXTI_InitTypeDef EXTI_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
@@ -224,171 +392,73 @@ static void MX_GPIO_Init(void)
   LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
 
   /**/
-  LL_GPIO_ResetOutputPin(LED0_GPIO_Port, LED0_Pin);
+  LL_SYSCFG_SetEXTISource(LL_SYSCFG_EXTI_PORTA, LL_SYSCFG_EXTI_LINE0);
 
   /**/
-  LL_GPIO_ResetOutputPin(LED1_GPIO_Port, LED1_Pin);
+  LL_GPIO_SetPinPull(Button0_GPIO_Port, Button0_Pin, LL_GPIO_PULL_UP);
 
   /**/
-  LL_GPIO_ResetOutputPin(LED2_GPIO_Port, LED2_Pin);
+  LL_GPIO_SetPinMode(Button0_GPIO_Port, Button0_Pin, LL_GPIO_MODE_INPUT);
 
   /**/
-  LL_GPIO_ResetOutputPin(LED3_GPIO_Port, LED3_Pin);
-
-  /**/
-  LL_GPIO_ResetOutputPin(LED4_GPIO_Port, LED4_Pin);
-
-  /**/
-  LL_GPIO_ResetOutputPin(LED5_GPIO_Port, LED5_Pin);
-
-  /**/
-  LL_GPIO_ResetOutputPin(LED6_GPIO_Port, LED6_Pin);
-
-  /**/
-  LL_GPIO_ResetOutputPin(LED7_GPIO_Port, LED7_Pin);
-
-  /**/
-  GPIO_InitStruct.Pin = Button0_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
-  LL_GPIO_Init(Button0_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = Button1_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
-  LL_GPIO_Init(Button1_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = Button2_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
-  LL_GPIO_Init(Button2_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = Button3_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
-  LL_GPIO_Init(Button3_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED0_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED0_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED1_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED1_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED2_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED2_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED3_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED3_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED4_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED4_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED5_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED5_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED6_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED6_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LED7_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
-  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(LED7_GPIO_Port, &GPIO_InitStruct);
-
-  /**/
-  GPIO_InitStruct.Pin = LL_GPIO_PIN_9;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  EXTI_InitStruct.Line_0_31 = LL_EXTI_LINE_0;
+  EXTI_InitStruct.LineCommand = ENABLE;
+  EXTI_InitStruct.Mode = LL_EXTI_MODE_IT;
+  EXTI_InitStruct.Trigger = LL_EXTI_TRIGGER_RISING;
+  LL_EXTI_Init(&EXTI_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
+  HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
-// Timer rolled over
-void TIM16_IRQHandler(void)
+void EXTI0_1_IRQHandler(void)
 {
-	// Acknowledge interrupt
-	HAL_TIM_IRQHandler(&htim16);
+	// TODO: Debounce using HAL_GetTick()
+	current_tick = HAL_GetTick();
 
-	// TODO: Change LED pattern
-	if(patternNumber == 1){
-		GPIOB -> ODR = PATTERN_1;
-	}
-	if(patternNumber == 2){
-		GPIOB -> ODR = PATTERN_2;
-	}
-	if(patternNumber == 3){
-		GPIOB -> ODR = PATTERN_3;
-	}
-	if(patternNumber == 4){
-		GPIOB -> ODR = PATTERN_4;
-	}
-	if(patternNumber == 5){
-		GPIOB -> ODR = PATTERN_5;
-	}
-	if(patternNumber == 6){
-		GPIOB -> ODR = PATTERN_6;
-	}
-	if(patternNumber == 7){
-		GPIOB -> ODR = PATTERN_7;
-	}
-	if(patternNumber == 8){
-		GPIOB -> ODR = PATTERN_8;
-	}
-	if(patternNumber == 9){
-		GPIOB -> ODR = PATTERN_9;
-	}
-	else{
-		patternNumber = 0;
-	}
-	paternNumber++;
+	// TODO: Disable DMA transfer and abort IT, then start DMA in IT mode with new LUT and re-enable transfer
+		// HINT: Consider using C's "switch" function to handle LUT changes
 
-  
+	if ((current_tick - last_tick) > DEBOUNCE_TIME)
+	{
+		// Update time and disable DMA
+		last_tick = current_tick;
+		HAL_DMA_Abort_IT(&hdma_tim2_ch1);
+
+		switch (current_LUT)
+		{
+			case 1:
+				// Set value and LED message for new LUT
+				++current_LUT;
+				lcd_command(CLEAR);
+				lcd_putstring("Saw");
+				// Start DMA with new LUT
+				HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)saw_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
+				break;
+			case 2:
+				++current_LUT;
+				lcd_command(CLEAR);
+				lcd_putstring("Triangle");
+				HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)triangle_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
+				break;
+			case 3:
+				current_LUT = 1;
+				lcd_command(CLEAR);
+				lcd_putstring("Sine");
+				HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)Sin_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
+				break;
+		}
+
+		__HAL_TIM_ENABLE_DMA(&htim2, TIM_DMA_CC1);
+		HAL_TIM_Base_Start(&htim2);
+
+	}
+
+	HAL_GPIO_EXTI_IRQHandler(Button0_Pin); // Clear interrupt flags
 }
-
 /* USER CODE END 4 */
 
 /**
