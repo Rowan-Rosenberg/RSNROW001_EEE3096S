@@ -36,7 +36,7 @@
 // TODO: Add values for below variables
 #define NS        128// Number of samples in LUT
 #define TIM2CLK   8000000// STM Clock frequency
-#define F_SIGNAL  500// Frequency of output analog signal
+#define F_SIGNAL  120// Frequency of output analog signal
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -52,6 +52,15 @@ DMA_HandleTypeDef hdma_tim2_ch1;
 /* USER CODE BEGIN PV */
 // TODO: Add code for global variables, including LUTs
 
+// Time values to handle debouncing
+#define DEBOUNCE_TIME 100
+uint32_t current_tick;
+uint32_t last_tick = 0;
+
+// Store Current LUT Name
+char current_LUT = 1;
+
+// LUTs
 uint32_t Sin_LUT[NS] = {
 		   512,   537,   562,   587,   611,   636,   660,
 		   684,   707,   730,   753,   775,   796,   816,
@@ -166,19 +175,23 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   // TODO: Start TIM3 in PWM mode on channel 3
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
 
 
   // TODO: Start TIM2 in Output Compare (OC) mode on channel 1.
-
+  HAL_TIM_OC_Start(&htim2, TIM_CHANNEL_1);
 
   // TODO: Start DMA in IT mode on TIM2->CH1; Source is LUT and Dest is TIM3->CCR3; start with Sine LUT
-
+  HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)Sin_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
 
   // TODO: Write current waveform to LCD ("Sine")
-  delay(3000);
+  init_LCD();
+  lcd_command(CLEAR);
+  lcd_putstring("Sine");
 
   // TODO: Enable DMA (start transfer from LUT to CCR)
-
+  __HAL_TIM_ENABLE_DMA(&htim2, TIM_DMA_CC1);
+  HAL_TIM_Base_Start(&htim2);
 
   /* USER CODE END 2 */
 
@@ -251,7 +264,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 100;
+  htim2.Init.Period = TIM2_Ticks;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -404,12 +417,45 @@ static void MX_GPIO_Init(void)
 void EXTI0_1_IRQHandler(void)
 {
 	// TODO: Debounce using HAL_GetTick()
-
+	current_tick = HAL_GetTick();
 
 	// TODO: Disable DMA transfer and abort IT, then start DMA in IT mode with new LUT and re-enable transfer
-	// HINT: Consider using C's "switch" function to handle LUT changes
+		// HINT: Consider using C's "switch" function to handle LUT changes
 
+	if ((current_tick - last_tick) > DEBOUNCE_TIME)
+	{
+		// Update time and disable DMA
+		last_tick = current_tick;
+		HAL_DMA_Abort_IT(&hdma_tim2_ch1);
 
+		switch (current_LUT)
+		{
+			case 1:
+				// Set value and LED message for new LUT
+				++current_LUT;
+				lcd_command(CLEAR);
+				lcd_putstring("Saw");
+				// Start DMA with new LUT
+				HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)saw_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
+				break;
+			case 2:
+				++current_LUT;
+				lcd_command(CLEAR);
+				lcd_putstring("Triangle");
+				HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)triangle_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
+				break;
+			case 3:
+				current_LUT = 1;
+				lcd_command(CLEAR);
+				lcd_putstring("Sine");
+				HAL_DMA_Start_IT(&hdma_tim2_ch1, (uint32_t)Sin_LUT, (uint32_t)&htim3.Instance->CCR3, NS);
+				break;
+		}
+
+		__HAL_TIM_ENABLE_DMA(&htim2, TIM_DMA_CC1);
+		HAL_TIM_Base_Start(&htim2);
+
+	}
 
 	HAL_GPIO_EXTI_IRQHandler(Button0_Pin); // Clear interrupt flags
 }
